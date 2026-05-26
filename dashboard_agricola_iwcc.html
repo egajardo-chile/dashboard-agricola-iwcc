@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard Agrícola · IWCC Casablanca</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#F8F2EA;--bg2:#FFFFFF;--bg3:#F0E8DC;--bg4:#E8DDD0;
+  --header-bg:#5C2308;--header-bg2:#4A1C06;
+  --verde:#2A6E1A;--verde-bright:#3A8828;--verde-light:#2A6E1A;
+  --tierra:#8B4020;--tierra-light:#C85808;
+  --amber:#C89010;--amber-light:#E0A820;
+  --rojo:#C0392B;--rojo-light:#D94030;
+  --azul:#1A5276;--azul-light:#2E86C1;
+  --gris:#8A7060;--gris-light:#B09880;
+  --text:#1A1008;--text-dim:#5A3820;--text-muted:#9A8070;
+  --border:#DDD0C0;--border-bright:#C8B8A0;
+  --font-mono:'Space Mono',monospace;
+  --font-serif:'Playfair Display',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font-mono);font-size:13px;overflow:hidden}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg3)}
+::-webkit-scrollbar-thumb{background:var(--tierra);border-radius:3px}
+
+/* LAYOUT */
+#app{display:flex;flex-direction:column;height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:var(--header-bg);border-bottom:1px solid var(--header-bg2);flex-shrink:0}
+.logo{font-family:var(--font-serif);font-size:18px;color:#F5E8D8;letter-spacing:1px}
+.logo span{color:#C8A888;font-size:12px;font-family:var(--font-mono);margin-left:10px;font-weight:400}
+.header-right{display:flex;gap:8px;align-items:center}
+.season-badge{background:var(--header-bg2);border:1px solid rgba(255,255,255,.25);padding:3px 10px;border-radius:12px;color:#E8D0B0;font-size:11px}
+
+/* TABS */
+nav{display:flex;gap:2px;padding:6px 20px 0;background:var(--bg2);border-bottom:2px solid var(--border);flex-shrink:0}
+.tab{padding:7px 18px;cursor:pointer;border-radius:6px 6px 0 0;color:var(--text-muted);font-family:var(--font-mono);font-size:12px;transition:all .2s;border:1px solid transparent;border-bottom:none;user-select:none}
+.tab:hover{color:var(--text-dim);background:var(--bg3)}
+.tab.active{color:var(--tierra);background:var(--bg);border-color:var(--border);border-bottom-color:var(--bg);font-weight:700}
+.tab-icon{margin-right:5px;opacity:.7}
+
+/* PANELS */
+.panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+.panel.active{display:flex}
+.panel-body{flex:1;overflow-y:auto;padding:16px 20px}
+
+/* UPLOAD BAR */
+.upload-bar{display:flex;gap:8px;padding:8px 20px;background:var(--bg3);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;flex-wrap:wrap}
+.upload-btn{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px dashed var(--border-bright);border-radius:6px;background:transparent;color:var(--text-dim);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .2s}
+.upload-btn:hover{border-color:var(--tierra);color:var(--tierra);background:var(--bg4)}
+.upload-btn.loaded{border-style:solid;border-color:var(--verde);color:var(--verde)}
+.upload-sep{color:var(--border-bright);font-size:16px}
+.upload-label{color:var(--text-muted);font-size:11px}
+input[type=file]{display:none}
+
+/* TABLES */
+.data-table{width:100%;border-collapse:collapse;font-size:12px}
+.data-table th{padding:8px 10px;text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border-bright);position:sticky;top:0;background:var(--bg2);z-index:2;white-space:nowrap;font-weight:400;letter-spacing:.5px;text-transform:uppercase;font-size:10px}
+.data-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+.data-table tr:hover td{background:var(--bg3)}
+.data-table tr.alert-row td{background:rgba(192,57,43,.06)}
+.data-table tr.alert-row:hover td{background:rgba(192,57,43,.12)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.clickable{cursor:pointer}
+.clickable:hover{color:var(--verde-light)}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.5px}
+.badge-LP{background:rgba(42,110,26,.12);color:#2A6E1A;border:1px solid rgba(42,110,26,.35)}
+.badge-CP{background:rgba(200,144,16,.12);color:#8B6200;border:1px solid rgba(200,144,16,.4)}
+.badge-MP{background:rgba(138,112,96,.15);color:#6A4828;border:1px solid rgba(138,112,96,.4)}
+.badge-ARRANQUE{background:rgba(192,57,43,.12);color:#C0392B;border:1px solid rgba(192,57,43,.35)}
+.badge-JOVEN{background:rgba(26,82,118,.1);color:#1A5276;border:1px solid rgba(26,82,118,.3)}
+.badge-alerta{background:rgba(200,88,8,.12);color:#C85808;border:1px solid rgba(200,88,8,.3);font-size:10px;padding:1px 6px}
+
+/* SCORE BAR */
+.score-wrap{display:flex;align-items:center;gap:8px}
+.score-bar{flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;min-width:60px}
+.score-fill{height:100%;border-radius:3px;transition:width .4s}
+.score-val{min-width:30px;text-align:right;font-size:12px}
+
+/* VARIEDAD DOTS */
+.var-CH{color:#8B4020;font-weight:700}.var-SB{color:#2A6E1A;font-weight:700}.var-PN{color:#6B2A80;font-weight:700}.var-ME{color:#C85808;font-weight:700}
+
+/* CARDS */
+.cards-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:4px}
+.card-label{color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.card-value{font-size:22px;font-weight:700;color:var(--tierra)}
+.card-sub{color:var(--text-dim);font-size:11px}
+
+/* SECTION HEADER */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sec-title{font-family:var(--font-serif);font-size:15px;color:var(--text);font-weight:600}
+.sec-actions{display:flex;gap:6px}
+
+/* BUTTONS */
+.btn{padding:5px 14px;border-radius:5px;font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .2s;border:1px solid}
+.btn-primary{background:var(--tierra);border-color:var(--tierra-light);color:#FFF5EC}
+.btn-primary:hover{background:var(--tierra-light)}
+.btn-ghost{background:transparent;border-color:var(--border-bright);color:var(--text-dim)}
+.btn-ghost:hover{border-color:var(--tierra);color:var(--tierra)}
+.btn-danger{background:rgba(192,57,43,.1);border-color:var(--rojo);color:var(--rojo)}
+
+/* FILTERS */
+.filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.filter-select{background:var(--bg2);border:1px solid var(--border);color:var(--text-dim);padding:4px 10px;border-radius:5px;font-family:var(--font-mono);font-size:11px;cursor:pointer}
+.filter-select:focus{outline:none;border-color:var(--verde)}
+.search-input{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:5px;font-family:var(--font-mono);font-size:11px;width:160px}
+.search-input:focus{outline:none;border-color:var(--verde)}
+
+/* COST TABLE */
+.prog-bar{height:8px;background:var(--bg4);border-radius:4px;overflow:hidden;min-width:80px}
+.prog-fill{height:100%;border-radius:4px}
+.prog-ok{background:var(--verde)}.prog-warn{background:var(--amber)}.prog-over{background:var(--rojo)}
+
+/* CUARTEL DETAIL */
+#detail-panel{display:none;flex:1;overflow:hidden;flex-direction:column}
+#detail-panel.active{display:flex}
+.detail-grid{display:grid;grid-template-columns:1fr 380px;gap:16px;height:100%}
+.detail-left{display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding:16px 0 16px 20px}
+.detail-right{overflow-y:auto;padding:16px 20px 16px 0;display:flex;flex-direction:column;gap:12px}
+.detail-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px}
+.detail-card-title{font-family:var(--font-serif);font-size:13px;color:var(--text-dim);margin-bottom:10px;font-weight:600}
+.chart-wrap{position:relative;height:220px}
+.criteria-list{display:flex;flex-direction:column;gap:8px}
+.crit-row{display:flex;flex-direction:column;gap:3px}
+.crit-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim)}
+.meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.meta-item{display:flex;flex-direction:column;gap:2px}
+.meta-key{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px}
+.meta-val{font-size:13px;color:var(--text)}
+.notes-area{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:5px;font-family:var(--font-mono);font-size:11px;resize:vertical;min-height:80px}
+.notes-area:focus{outline:none;border-color:var(--verde)}
+
+/* CALICATA SECTION */
+.calicata-tag{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:8px;font-size:10px}
+.cal-available{background:rgba(42,110,26,.1);color:var(--verde);border:1px solid rgba(42,110,26,.3)}
+.cal-manual{background:rgba(200,144,16,.1);color:var(--amber);border:1px solid rgba(200,144,16,.3)}
+.cal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.cal-select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:5px;font-family:var(--font-mono);font-size:11px}
+.cal-select:focus{outline:none;border-color:var(--verde)}
+
+/* MAP */
+#map{height:100%;width:100%;background:var(--bg2)}
+.map-wrap{flex:1;position:relative;overflow:hidden}
+.map-legend{position:absolute;bottom:20px;left:20px;z-index:999;background:rgba(92,35,8,.92);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 14px;backdrop-filter:blur(4px)}
+.map-legend-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;color:#E8D0B0}
+.map-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border-bright);border-radius:10px;padding:20px;min-width:400px;max-width:560px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px rgba(92,35,8,.2)}
+.modal-title{font-family:var(--font-serif);font-size:16px;color:var(--tierra);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.modal-close{cursor:pointer;color:var(--text-muted);font-size:18px;line-height:1}
+.modal-close:hover{color:var(--text)}
+.form-group{margin-bottom:12px}
+.form-label{display:block;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.form-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:5px;font-family:var(--font-mono);font-size:12px}
+.form-input:focus{outline:none;border-color:var(--verde)}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* TOASTER */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--header-bg);border:1px solid rgba(255,255,255,.2);color:#F0DEC8;padding:10px 16px;border-radius:8px;font-size:12px;z-index:2000;transform:translateY(60px);opacity:0;transition:all .3s}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{border-color:var(--rojo);color:var(--rojo-light)}
+
+/* ALERT ICON */
+.ic-alert{color:var(--rojo-light);font-size:12px}
+.ic-ok{color:var(--verde-light);font-size:12px}
+
+/* BACK BUTTON */
+.back-btn{display:flex;align-items:center;gap:6px;background:transparent;border:none;color:var(--text-dim);font-family:var(--font-mono);font-size:12px;cursor:pointer;padding:0;transition:color .2s}
+.back-btn:hover{color:var(--tierra)}
+
+/* RESPONSIVE */
+@media(max-width:1100px){
+  .cards-grid{grid-template-columns:repeat(2,1fr)}
+  .detail-grid{grid-template-columns:1fr;height:auto}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="logo">IWCC <span>Dashboard Agrícola · Casablanca</span></div>
+  </div>
+  <div class="header-right">
+    <div class="season-badge">Temporada 2025–2026</div>
+    <button class="btn" style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#F0DEC8;font-family:var(--font-mono);font-size:11px;cursor:pointer;padding:5px 14px;border-radius:5px;transition:all .2s" onmouseover="this.style.background='rgba(255,255,255,.25)'" onmouseout="this.style.background='rgba(255,255,255,.15)'" onclick="exportXLSX()">↓ Exportar Excel</button>
+  </div>
+</header>
+
+<!-- UPLOAD BAR -->
+<div class="upload-bar">
+  <span class="upload-label">Cargar datos:</span>
+  <label class="upload-btn" id="lbl-kg" title="Hoja 'Informe #7' — rendimientos y PPTO">
+    <span>📊</span> Kg Uva / PPTO
+    <input type="file" accept=".xlsx,.xls" onchange="handleKgUpload(this)">
+  </label>
+  <label class="upload-btn" id="lbl-cost" title="Hoja '1. PPTO Agrícola Casablanca'">
+    <span>💰</span> Móvil Agrícola
+    <input type="file" accept=".xlsx,.xls" onchange="handleCostUpload(this)">
+  </label>
+  <span class="upload-sep">|</span>
+  <span style="color:var(--text-muted);font-size:11px;font-style:italic">Datos semilla cargados — sube los archivos para actualizar</span>
+</div>
+
+<!-- TABS -->
+<nav>
+  <div class="tab active" onclick="showTab('resumen')"><span class="tab-icon">▦</span>Resumen</div>
+  <div class="tab" id="tab-cuartel" onclick="showTab('cuartel')"><span class="tab-icon">◈</span>Cuartel</div>
+  <div class="tab" onclick="showTab('costos')"><span class="tab-icon">◎</span>Costos</div>
+  <div class="tab" onclick="showTab('mapa')"><span class="tab-icon">◉</span>Mapa</div>
+</nav>
+
+<!-- PANEL: RESUMEN -->
+<div class="panel active" id="panel-resumen">
+  <div class="panel-body">
+    <div class="cards-grid" id="kpi-cards"></div>
+    <div class="sec-hdr">
+      <div class="sec-title">Cuarteles — Clasificación y Score</div>
+      <div class="sec-actions">
+        <div class="filters">
+          <input class="search-input" placeholder="Buscar cuartel…" oninput="filterTable(this.value)">
+          <select class="filter-select" onchange="filterParcela(this.value)">
+            <option value="">Todas las parcelas</option>
+            <option>P-6</option><option>11H</option><option>P-12 B2</option><option>P-13 B</option><option>P-3B2</option>
+          </select>
+          <select class="filter-select" onchange="filterVariedad(this.value)">
+            <option value="">Todas variedades</option>
+            <option>CH</option><option>SB</option><option>PN</option><option>ME</option>
+          </select>
+          <select class="filter-select" onchange="filterClasif(this.value)">
+            <option value="">Todas clasificaciones</option>
+            <option>LP</option><option>CP</option><option>MP</option><option>ARRANQUE</option><option>JOVEN</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <table class="data-table" id="resumen-table">
+      <thead>
+        <tr>
+          <th>C#</th><th>Parcela</th><th>Var.</th><th>Año</th><th>Ha</th>
+          <th class="num">Kg/ha 2024</th><th class="num">Kg/ha 2025</th>
+          <th class="num">Kg/ha Móvil</th><th class="num">Dev.%</th>
+          <th class="num">CLP/Kg est.</th>
+          <th>Clasif. Actual</th><th>Score</th><th>Recom.</th><th>Alerta</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="resumen-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PANEL: CUARTEL DETAIL -->
+<div class="panel" id="panel-cuartel">
+  <div class="panel-body" style="padding:0">
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg2);flex-shrink:0">
+      <button class="back-btn" onclick="showTab('resumen')">← Volver</button>
+      <span style="color:var(--border-bright)">|</span>
+      <span id="detail-title" style="color:var(--verde-light);font-family:var(--font-serif);font-size:14px;font-weight:600"></span>
+    </div>
+    <div class="detail-grid" style="padding:0;flex:1;overflow:hidden" id="detail-content"></div>
+  </div>
+</div>
+
+<!-- PANEL: COSTOS -->
+<div class="panel" id="panel-costos">
+  <div class="panel-body">
+    <div class="cards-grid" id="cost-kpi-cards" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="sec-hdr">
+      <div class="sec-title">PPTO Agrícola Casablanca 2025–2026</div>
+    </div>
+    <table class="data-table" id="cost-table">
+      <thead>
+        <tr>
+          <th>Cuenta</th>
+          <th class="num">Real a la fecha</th>
+          <th class="num">Restante</th>
+          <th class="num">Móvil 2025-26</th>
+          <th class="num">PPTO 2025-26</th>
+          <th class="num">Diferencia</th>
+          <th class="num">% Dev.</th>
+          <th>Ejecución</th>
+        </tr>
+      </thead>
+      <tbody id="cost-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PANEL: MAPA -->
+<div class="panel" id="panel-mapa">
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-legend">
+      <div style="font-family:var(--font-serif);font-size:12px;color:#E8D0B0;margin-bottom:8px">Clasificación</div>
+      <div class="map-legend-row"><div class="map-dot" style="background:#4A8C24"></div>Largo Plazo (LP)</div>
+      <div class="map-legend-row"><div class="map-dot" style="background:#D4A017"></div>Corto Plazo (CP)</div>
+      <div class="map-legend-row"><div class="map-dot" style="background:#556B47"></div>Mantención (MP)</div>
+      <div class="map-legend-row"><div class="map-dot" style="background:#C0392B"></div>Arranque</div>
+      <div class="map-legend-row"><div class="map-dot" style="background:#2E86C1"></div>Joven (en desarrollo)</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CALICATA EDITOR -->
+<div class="modal-overlay" id="modal-calicata">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Editar Evaluación Campo — <span id="modal-cal-title"></span></span>
+      <span class="modal-close" onclick="closeModal('modal-calicata')">✕</span>
+    </div>
+    <input type="hidden" id="modal-cal-num">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Vigor</label>
+        <select class="form-input" id="cal-vigor">
+          <option>Alto</option><option>Medio</option><option>Bajo</option><option>Crítico</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Exploración Radicular</label>
+        <select class="form-input" id="cal-raices">
+          <option>Buena</option><option>Media</option><option>Baja</option><option>Muerta</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Compactación</label>
+        <select class="form-input" id="cal-compactacion">
+          <option>Ninguna</option><option>Leve</option><option>Alta</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">% Plantas Muertas</label>
+        <input type="number" class="form-input" id="cal-muertas" min="0" max="100" placeholder="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observaciones de campo</label>
+      <textarea class="form-input" id="cal-obs" rows="3" style="resize:vertical"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-calicata')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCalicata()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  SEED DATA — 36 cuarteles, 5 parcelas, ~80.6 ha
+// ═══════════════════════════════════════════════════════
+const SEED_CUARTELES = [
+  // P-6 (4 cuarteles)
+  {num:1, parcela:'P-6',     variedad:'SB', anio:2005, clon:'1',   ha:3.2, riego:'Goteo', clasif:'LP',      kg24:28480, kg25:27150, ppto26:28000, movil26:26800, dif_pct:-4.3},
+  {num:2, parcela:'P-6',     variedad:'SB', anio:2003, clon:'1',   ha:2.8, riego:'Goteo', clasif:'LP',      kg24:22400, kg25:21100, ppto26:23000, movil26:20900, dif_pct:-9.1},
+  {num:3, parcela:'P-6',     variedad:'CH', anio:2008, clon:'809', ha:4.1, riego:'Goteo', clasif:'LP',      kg24:35260, kg25:34780, ppto26:36000, movil26:34500, dif_pct:-4.2},
+  {num:4, parcela:'P-6',     variedad:'CH', anio:2010, clon:'809', ha:3.5, riego:'Goteo', clasif:'CP',      kg24:19650, kg25:18200, ppto26:22000, movil26:17800, dif_pct:-19.1},
+  // 11H (9 cuarteles)
+  {num:5, parcela:'11H',     variedad:'PN', anio:2012, clon:'115', ha:2.3, riego:'Goteo', clasif:'LP',      kg24:14490, kg25:15200, ppto26:15000, movil26:15600, dif_pct:4.0},
+  {num:6, parcela:'11H',     variedad:'PN', anio:2014, clon:'777', ha:1.8, riego:'Goteo', clasif:'LP',      kg24:10170, kg25:11100, ppto26:11000, movil26:11400, dif_pct:3.6},
+  {num:7, parcela:'11H',     variedad:'PN', anio:2015, clon:'667', ha:2.1, riego:'Goteo', clasif:'CP',      kg24:9820,  kg25:8900,  ppto26:10500, movil26:8600,  dif_pct:-18.1},
+  {num:8, parcela:'11H',     variedad:'CH', anio:2016, clon:'548', ha:1.9, riego:'Goteo', clasif:'MP',      kg24:8180,  kg25:7100,  ppto26:9000,  movil26:6800,  dif_pct:-24.4},
+  {num:9, parcela:'11H',     variedad:'SB', anio:2018, clon:'1',   ha:1.6, riego:'Goteo', clasif:'ARRANQUE',kg24:2100,  kg25:3200,  ppto26:4000,  movil26:3800,  dif_pct:-5.0},
+  {num:10,parcela:'11H',     variedad:'SB', anio:2001, clon:'1',   ha:2.0, riego:'Goteo', clasif:'LP',      kg24:17580, kg25:17200, ppto26:18000, movil26:17000, dif_pct:-5.6},
+  {num:11,parcela:'11H',     variedad:'CH', anio:2000, clon:'96',  ha:2.5, riego:'Goteo', clasif:'LP',      kg24:21500, kg25:20800, ppto26:22000, movil26:20500, dif_pct:-6.8},
+  {num:12,parcela:'11H',     variedad:'CH', anio:1999, clon:'809', ha:1.7, riego:'Goteo', clasif:'CP',      kg24:10800, kg25:9900,  ppto26:11000, movil26:9600,  dif_pct:-12.7},
+  {num:13,parcela:'11H',     variedad:'ME', anio:1999, clon:'181', ha:1.9, riego:'Goteo', clasif:'CP',      kg24:11180, kg25:10100, ppto26:12000, movil26:9800,  dif_pct:-18.3},
+  // P-12 B2 (10 cuarteles)
+  {num:14,parcela:'P-12 B2', variedad:'SB', anio:2006, clon:'1',   ha:2.1, riego:'Goteo', clasif:'LP',      kg24:18900, kg25:19200, ppto26:19000, movil26:19400, dif_pct:2.1},
+  {num:15,parcela:'P-12 B2', variedad:'SB', anio:2004, clon:'316', ha:2.4, riego:'Goteo', clasif:'LP',      kg24:21600, kg25:20900, ppto26:22000, movil26:20600, dif_pct:-6.4},
+  {num:16,parcela:'P-12 B2', variedad:'CH', anio:1998, clon:'96',  ha:3.8, riego:'Goteo', clasif:'CP',      kg24:24200, kg25:21800, ppto26:25000, movil26:20500, dif_pct:-18.0},
+  {num:17,parcela:'P-12 B2', variedad:'CH', anio:1998, clon:'809', ha:2.9, riego:'Goteo', clasif:'CP',      kg24:19100, kg25:16800, ppto26:20000, movil26:15900, dif_pct:-20.5},
+  {num:18,parcela:'P-12 B2', variedad:'SB', anio:2007, clon:'1',   ha:1.6, riego:'Goteo', clasif:'LP',      kg24:14380, kg25:14800, ppto26:15000, movil26:15000, dif_pct:0.0},
+  {num:19,parcela:'P-12 B2', variedad:'SB', anio:2009, clon:'316', ha:2.2, riego:'Goteo', clasif:'LP',      kg24:19840, kg25:20100, ppto26:20000, movil26:20300, dif_pct:1.5},
+  {num:20,parcela:'P-12 B2', variedad:'SB', anio:2004, clon:'1',   ha:3.1, riego:'Goteo', clasif:'CP',      kg24:20100, kg25:19200, ppto26:21000, movil26:18800, dif_pct:-10.5},
+  {num:21,parcela:'P-12 B2', variedad:'PN', anio:2013, clon:'115', ha:1.8, riego:'Goteo', clasif:'LP',      kg24:10800, kg25:11200, ppto26:11000, movil26:11400, dif_pct:3.6},
+  {num:22,parcela:'P-12 B2', variedad:'ME', anio:1998, clon:'181', ha:2.7, riego:'Goteo', clasif:'CP',      kg24:16200, kg25:14100, ppto26:17000, movil26:13500, dif_pct:-20.6},
+  {num:23,parcela:'P-12 B2', variedad:'CH', anio:2022, clon:'548', ha:2.0, riego:'Goteo', clasif:2022,      kg24:1200,  kg25:3500,  ppto26:5000,  movil26:4800,  dif_pct:-4.0},
+  // P-13 B (7 cuarteles)
+  {num:24,parcela:'P-13 B',  variedad:'SB', anio:2005, clon:'1',   ha:1.9, riego:'Goteo', clasif:'LP',      kg24:17100, kg25:16900, ppto26:17500, movil26:16700, dif_pct:-4.6},
+  {num:25,parcela:'P-13 B',  variedad:'SB', anio:2003, clon:'316', ha:2.3, riego:'Goteo', clasif:'LP',      kg24:20700, kg25:21100, ppto26:21000, movil26:21300, dif_pct:1.4},
+  {num:26,parcela:'P-13 B',  variedad:'CH', anio:2011, clon:'809', ha:2.8, riego:'Goteo', clasif:'LP',      kg24:25200, kg25:24800, ppto26:25500, movil26:24600, dif_pct:-3.5},
+  {num:27,parcela:'P-13 B',  variedad:'PN', anio:2018, clon:'667', ha:1.7, riego:'Goteo', clasif:2018,      kg24:5600,  kg25:7800,  ppto26:9000,  movil26:8500,  dif_pct:-5.6},
+  {num:28,parcela:'P-13 B',  variedad:'CH', anio:2001, clon:'96',  ha:2.1, riego:'Goteo', clasif:'LP',      kg24:18900, kg25:18200, ppto26:19000, movil26:18000, dif_pct:-5.3},
+  {num:29,parcela:'P-13 B',  variedad:'ME', anio:2000, clon:'181', ha:1.5, riego:'Goteo', clasif:'CP',      kg24:9780,  kg25:8900,  ppto26:10500, movil26:8600,  dif_pct:-18.1},
+  {num:30,parcela:'P-13 B',  variedad:'SB', anio:2019, clon:'1',   ha:2.4, riego:'Goteo', clasif:2019,      kg24:7200,  kg25:10800, ppto26:13000, movil26:12500, dif_pct:-3.8},
+  // P-3B2 (6 cuarteles)
+  {num:31,parcela:'P-3B2',   variedad:'SB', anio:2006, clon:'1',   ha:1.8, riego:'Goteo', clasif:'LP',      kg24:16200, kg25:16500, ppto26:17000, movil26:16800, dif_pct:-1.2},
+  {num:32,parcela:'P-3B2',   variedad:'CH', anio:2004, clon:'548', ha:2.2, riego:'Goteo', clasif:'LP',      kg24:19800, kg25:20100, ppto26:20500, movil26:20200, dif_pct:-1.5},
+  {num:33,parcela:'P-3B2',   variedad:'CH', anio:2008, clon:'809', ha:1.6, riego:'Goteo', clasif:'MP',      kg24:9100,  kg25:8200,  ppto26:10000, movil26:7900,  dif_pct:-21.0},
+  {num:34,parcela:'P-3B2',   variedad:'PN', anio:2016, clon:'115', ha:2.0, riego:'Goteo', clasif:'CP',      kg24:10200, kg25:9800,  ppto26:11000, movil26:9500,  dif_pct:-13.6},
+  {num:35,parcela:'P-3B2',   variedad:'SB', anio:2020, clon:'316', ha:1.9, riego:'Goteo', clasif:2020,      kg24:4500,  kg25:7200,  ppto26:9000,  movil26:8600,  dif_pct:-4.4},
+  {num:36,parcela:'P-3B2',   variedad:'ME', anio:1999, clon:'181', ha:1.8, riego:'Goteo', clasif:'CP',      kg24:10800, kg25:9900,  ppto26:11500, movil26:9600,  dif_pct:-16.5},
+];
+
+// Calicata data (C16, C17, C20, C22 from PPTX — rest manual)
+const SEED_CALICATAS = {
+  16:{vigor:'Bajo',    raices:'Baja',  compactacion:'Alta',   muertas:18, obs:'Desvigorizacion severa. Subsolado otoño 2025. Perfil 0-30cm: franco arcilloso. 30-60cm: arcilla compactada. Raíces confinadas a horizonte superficial.',  fuente:'PPTX'},
+  17:{vigor:'Bajo',    raices:'Baja',  compactacion:'Alta',   muertas:22, obs:'Desvigorizacion severa. Subsolado otoño 2025. Clon 809. Mayor % plantas muertas que C#16. Misma problemática de compactación en B horizonte.',               fuente:'PPTX'},
+  20:{vigor:'Medio',   raices:'Media', compactacion:'Leve',   muertas:8,  obs:'Estado general aceptable. SB 2004. Exploración radicular alcanza 40cm. Compactación puntual en fajas de tránsito de maquinaria.',                            fuente:'PPTX'},
+  22:{vigor:'Medio',   raices:'Baja',  compactacion:'Alta',   muertas:28, obs:'ME 1998. Compactación alta en horizonte 30-60cm. Alto % plantas muertas. Rendimiento en caída sostenida 2023-2025. Candidato a reclasificación.',             fuente:'PPTX'},
+};
+
+// Seed cost data (M CLP)
+const SEED_COSTOS = [
+  {cuenta:'M.O. Propia',     real:39200, restante:5800,  movil:44100, ppto:45000},
+  {cuenta:'Contratistas',    real:29800, restante:4200,  movil:38400, ppto:35000},
+  {cuenta:'Administración',  real:10200, restante:1800,  movil:11800, ppto:12000},
+  {cuenta:'Materiales',      real:15300, restante:2700,  movil:17200, ppto:18000},
+  {cuenta:'Insumos',         real:23900, restante:3600,  movil:29100, ppto:28000},
+  {cuenta:'Maquinaria',      real:18700, restante:2800,  movil:22500, ppto:22000},
+  {cuenta:'Energía',         real:6800,  restante:1200,  movil:8200,  ppto:8000},
+  {cuenta:'Flete Uva',       real:9200,  restante:1800,  movil:11400, ppto:12000},
+  {cuenta:'Otros',           real:3400,  restante:600,   movil:4200,  ppto:4000},
+];
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let state = {
+  cuarteles: JSON.parse(JSON.stringify(SEED_CUARTELES)),
+  calicatas: JSON.parse(JSON.stringify(SEED_CALICATAS)),
+  costos: JSON.parse(JSON.stringify(SEED_COSTOS)),
+  notes: {},
+  selectedNum: null,
+  filterSearch: '', filterParcela: '', filterVariedad: '', filterClasif: '',
+};
+
+// ═══════════════════════════════════════════════════════
+//  SCORE ENGINE
+// ═══════════════════════════════════════════════════════
+function isJoven(c){ return typeof c.clasif === 'number' || (typeof c.clasif === 'string' && /^\d{4}$/.test(c.clasif)); }
+
+function scoreRendimiento(c){
+  const kgha24 = c.kg24 / c.ha;
+  const kgha25 = c.kg25 / c.ha;
+  const kgha26 = c.movil26 / c.ha;
+  if(isJoven(c)) return Math.min(100, kgha26 / 60); // joven: lower bar
+  const trend = (kgha26 - kgha24) / (kgha24 || 1);
+  const base = Math.min(100, kgha26 / 80);
+  return Math.max(0, Math.min(100, base * 100 + trend * 20));
+}
+
+function scoreDesviacion(c){
+  const d = c.dif_pct;
+  return Math.max(0, Math.min(100, 100 + d * 2));
+}
+
+function scoreCLPkg(c){
+  const totalCostMovil = state.costos.reduce((s,x)=>s+x.movil, 0);
+  const totalHa = state.cuarteles.reduce((s,x)=>s+x.ha, 0);
+  const costPorHa = (totalCostMovil * 1000) / totalHa;
+  const kgMovilHa = c.movil26 / c.ha;
+  const clpKg = kgMovilHa > 0 ? costPorHa / kgMovilHa : 9999;
+  c._clpKg = Math.round(clpKg);
+  return Math.max(0, Math.min(100, (500 - clpKg) / 3));
+}
+
+const VIGOR_MAP = {Alto:100, Medio:66, Bajo:33, Crítico:0};
+const RAICES_MAP = {Buena:100, Media:66, Baja:33, Muerta:0};
+const COMPACT_MAP = {Ninguna:100, Leve:50, Alta:0};
+
+function scoreVigor(c){
+  const cal = state.calicatas[c.num];
+  if(!cal) return 60;
+  return VIGOR_MAP[cal.vigor] ?? 60;
+}
+function scoreRaices(c){
+  const cal = state.calicatas[c.num];
+  if(!cal) return 60;
+  return RAICES_MAP[cal.raices] ?? 60;
+}
+function scoreCompact(c){
+  const cal = state.calicatas[c.num];
+  if(!cal) return 70;
+  return COMPACT_MAP[cal.compactacion] ?? 70;
+}
+
+function calcScore(c){
+  const joven = isJoven(c);
+  const weights = joven
+    ? {rend:0.10, dev:0.15, cost:0.15, vigor:0.30, raices:0.20, compact:0.10}
+    : {rend:0.25, dev:0.20, cost:0.20, vigor:0.15, raices:0.10, compact:0.10};
+
+  const scores = {
+    rend:     scoreRendimiento(c),
+    dev:      scoreDesviacion(c),
+    cost:     scoreCLPkg(c),
+    vigor:    scoreVigor(c),
+    raices:   scoreRaices(c),
+    compact:  scoreCompact(c),
+  };
+  const total = Object.keys(scores).reduce((s,k)=>s + scores[k]*weights[k], 0);
+  return {total: Math.round(total), breakdown: scores, weights};
+}
+
+function recomClasif(c, score){
+  if(isJoven(c)) return String(c.clasif);
+  const cal = state.calicatas[c.num];
+  const muertas = cal?.muertas ?? 0;
+  if(score < 35 && muertas > 30) return 'ARRANQUE';
+  if(score >= 70) return 'LP';
+  if(score >= 50) return 'CP';
+  if(score >= 35) return 'MP';
+  return 'ARRANQUE';
+}
+
+function alertCheck(c, score){
+  const movHa = c.movil26 / c.ha;
+  const prev25 = c.kg25 / c.ha;
+  const dropPct = (movHa - prev25) / (prev25 || 1) * 100;
+  const alerts = [];
+  if(dropPct < -20) alerts.push(`↓${Math.abs(dropPct).toFixed(0)}% vs 2025`);
+  const rec = recomClasif(c, score);
+  const cur = String(c.clasif);
+  if(rec !== cur && !isJoven(c)) alerts.push(`Recom: ${rec}≠Actual: ${cur}`);
+  if(c.clasif === 'ARRANQUE') alerts.push('ARRANQUE');
+  return alerts;
+}
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════
+function fmt(n){ return n == null ? '—' : Number(n).toLocaleString('es-CL'); }
+function fmtPct(n){ return n == null ? '—' : (n > 0 ? '+' : '') + n.toFixed(1) + '%'; }
+function scoreColor(s){ if(s>=70)return'#2A6E1A'; if(s>=50)return'#C89010'; if(s>=35)return'#C85808'; return'#C0392B'; }
+function clasifBadge(c){
+  const str = String(c);
+  if(str==='LP')    return `<span class="badge badge-LP">LP</span>`;
+  if(str==='CP')    return `<span class="badge badge-CP">CP</span>`;
+  if(str==='MP')    return `<span class="badge badge-MP">MP</span>`;
+  if(str==='ARRANQUE') return `<span class="badge badge-ARRANQUE">ARRANQUE</span>`;
+  return `<span class="badge badge-JOVEN">${str}</span>`;
+}
+function varColor(v){ return({CH:'var-CH',SB:'var-SB',PN:'var-PN',ME:'var-ME'})[v]||''; }
+function mapColor(clasif){
+  const s = String(clasif);
+  if(s==='LP') return '#2A6E1A';
+  if(s==='CP') return '#C89010';
+  if(s==='MP') return '#8B6A40';
+  if(s==='ARRANQUE') return '#C0392B';
+  return '#1A5276';
+}
+
+function toast(msg, err=false){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err?' error':'');
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>t.className='toast', 2800);
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: KPI CARDS
+// ═══════════════════════════════════════════════════════
+function renderKPIs(){
+  const cuarteles = state.cuarteles;
+  const totalHa = cuarteles.reduce((s,c)=>s+c.ha, 0);
+  const totalMovil = cuarteles.reduce((s,c)=>s+c.movil26, 0);
+  const totalPpto = cuarteles.reduce((s,c)=>s+c.ppto26, 0);
+  const devTotal = (totalMovil - totalPpto) / totalPpto * 100;
+  const scored = cuarteles.map(c=>({c, sc:calcScore(c)}));
+  const avgScore = Math.round(scored.reduce((s,x)=>s+x.sc.total, 0)/cuarteles.length);
+  const alertCount = scored.filter(x=>alertCheck(x.c, x.sc.total).length>0).length;
+
+  document.getElementById('kpi-cards').innerHTML = `
+    <div class="card">
+      <div class="card-label">Total Superficie</div>
+      <div class="card-value">${totalHa.toFixed(1)} ha</div>
+      <div class="card-sub">${cuarteles.length} cuarteles · 5 parcelas</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Kg Móvil 2026</div>
+      <div class="card-value">${(totalMovil/1000).toFixed(0)} t</div>
+      <div class="card-sub" style="color:${devTotal<0?'var(--rojo-light)':'var(--verde-light)'}">${fmtPct(devTotal)} vs PPTO</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Score Promedio</div>
+      <div class="card-value" style="color:${scoreColor(avgScore)}">${avgScore}</div>
+      <div class="card-sub">sobre 100 puntos</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cuarteles con Alerta</div>
+      <div class="card-value" style="color:${alertCount>0?'var(--rojo-light)':'var(--verde-light)'}">${alertCount}</div>
+      <div class="card-sub">requieren revisión</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: RESUMEN TABLE
+// ═══════════════════════════════════════════════════════
+function filteredCuarteles(){
+  let data = state.cuarteles;
+  if(state.filterSearch){
+    const q = state.filterSearch.toLowerCase();
+    data = data.filter(c=>
+      String(c.num).includes(q) ||
+      c.parcela.toLowerCase().includes(q) ||
+      c.variedad.toLowerCase().includes(q)
+    );
+  }
+  if(state.filterParcela) data = data.filter(c=>c.parcela===state.filterParcela);
+  if(state.filterVariedad) data = data.filter(c=>c.variedad===state.filterVariedad);
+  if(state.filterClasif){
+    const f = state.filterClasif;
+    data = data.filter(c=>{
+      const s = String(c.clasif);
+      if(f==='JOVEN') return isJoven(c);
+      return s===f;
+    });
+  }
+  return data;
+}
+
+function renderResumen(){
+  const data = filteredCuarteles();
+  const rows = data.map(c=>{
+    const sc = calcScore(c);
+    const rec = recomClasif(c, sc.total);
+    const alerts = alertCheck(c, sc.total);
+    const kgha24 = (c.kg24/c.ha).toFixed(0);
+    const kgha25 = (c.kg25/c.ha).toFixed(0);
+    const kghaM  = (c.movil26/c.ha).toFixed(0);
+    const alertHtml = alerts.length ? `<span class="badge badge-alerta">⚠ ${alerts[0]}</span>` : `<span style="color:var(--text-muted);font-size:11px">—</span>`;
+    const isAlert = alerts.length > 0;
+    return `<tr class="${isAlert?'alert-row':''} clickable" onclick="openCuartel(${c.num})">
+      <td><strong style="color:var(--verde-light)">C#${c.num}</strong></td>
+      <td style="color:var(--text-dim)">${c.parcela}</td>
+      <td><span class="${varColor(c.variedad)}">${c.variedad}</span></td>
+      <td style="color:var(--text-muted)">${c.anio}</td>
+      <td class="num">${c.ha.toFixed(1)}</td>
+      <td class="num">${fmt(kgha24)}</td>
+      <td class="num">${fmt(kgha25)}</td>
+      <td class="num" style="color:${c.dif_pct<-20?'var(--rojo-light)':'var(--text)'}">${fmt(kghaM)}</td>
+      <td class="num" style="color:${c.dif_pct<-15?'var(--rojo-light)':c.dif_pct<0?'var(--amber)':'var(--verde-light)'}">${fmtPct(c.dif_pct)}</td>
+      <td class="num" style="color:var(--text-dim)">${c._clpKg ? fmt(c._clpKg) : '—'}</td>
+      <td>${clasifBadge(c.clasif)}</td>
+      <td>
+        <div class="score-wrap">
+          <div class="score-bar"><div class="score-fill" style="width:${sc.total}%;background:${scoreColor(sc.total)}"></div></div>
+          <span class="score-val" style="color:${scoreColor(sc.total)}">${sc.total}</span>
+        </div>
+      </td>
+      <td>${clasifBadge(rec)}</td>
+      <td>${alertHtml}</td>
+      <td><button class="btn btn-ghost" style="padding:2px 8px;font-size:10px" onclick="event.stopPropagation();openCalicataModal(${c.num})">Cal.</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('resumen-tbody').innerHTML = rows || `<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:30px">Sin resultados</td></tr>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: CUARTEL DETAIL
+// ═══════════════════════════════════════════════════════
+let detailChart = null;
+function openCuartel(num){
+  state.selectedNum = num;
+  showTab('cuartel');
+  renderDetail();
+}
+
+function renderDetail(){
+  const c = state.cuarteles.find(x=>x.num===state.selectedNum);
+  if(!c) return;
+  const sc = calcScore(c);
+  const rec = recomClasif(c, sc.total);
+  const cal = state.calicatas[c.num];
+  const alerts = alertCheck(c, sc.total);
+
+  document.getElementById('detail-title').textContent =
+    `C#${c.num} · ${c.variedad} ${c.anio} · ${c.parcela} · ${c.ha.toFixed(1)} ha`;
+
+  document.getElementById('tab-cuartel').textContent = `◈ C#${c.num}`;
+
+  const breakdownHtml = Object.entries(sc.breakdown).map(([k,v])=>{
+    const labels = {rend:'Rendimiento histórico',dev:'Desv. Móvil vs PPTO',cost:'Eficiencia CLP/Kg',vigor:'Vigor',raices:'Raíces',compact:'Compactación'};
+    const weights = sc.weights;
+    return `<div class="crit-row">
+      <div class="crit-label"><span>${labels[k]}</span><span style="color:${scoreColor(v)}">${Math.round(v)} / 100 <span style="color:var(--text-muted)">(×${weights[k]})</span></span></div>
+      <div class="score-bar" style="height:5px"><div class="score-fill" style="width:${v}%;background:${scoreColor(v)}"></div></div>
+    </div>`;
+  }).join('');
+
+  const calTag = cal
+    ? `<span class="calicata-tag cal-available">✓ Calicata ${cal.fuente}</span>`
+    : `<span class="calicata-tag cal-manual">⚬ Sin calicata — datos estimados</span>`;
+
+  const calContent = cal ? `
+    <div class="cal-grid">
+      <div class="meta-item"><div class="meta-key">Vigor</div><div class="meta-val" style="color:${VIGOR_MAP[cal.vigor]<50?'var(--rojo-light)':'var(--amber-light)'}">${cal.vigor}</div></div>
+      <div class="meta-item"><div class="meta-key">Raíces</div><div class="meta-val">${cal.raices}</div></div>
+      <div class="meta-item"><div class="meta-key">Compactación</div><div class="meta-val" style="color:${cal.compactacion==='Alta'?'var(--rojo-light)':cal.compactacion==='Leve'?'var(--amber)':'var(--verde-light)'}">${cal.compactacion}</div></div>
+      <div class="meta-item"><div class="meta-key">Plantas muertas</div><div class="meta-val" style="color:${cal.muertas>20?'var(--rojo-light)':cal.muertas>10?'var(--amber)':'var(--verde-light)'}">${cal.muertas}%</div></div>
+    </div>
+    ${cal.obs ? `<div style="margin-top:8px;color:var(--text-dim);font-size:11px;line-height:1.5;font-style:italic">${cal.obs}</div>` : ''}
+  ` : `<div style="color:var(--text-muted);font-size:11px;font-style:italic">Sin evaluación de campo registrada.<br>Usa el botón "Editar Cal." para ingresar datos.</div>`;
+
+  const alertHtml = alerts.length
+    ? `<div style="background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.3);border-radius:6px;padding:10px;margin-bottom:8px">
+        ${alerts.map(a=>`<div style="color:var(--rojo-light);font-size:12px">⚠ ${a}</div>`).join('')}
+      </div>` : '';
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-left">
+      ${alertHtml}
+      <div class="detail-card">
+        <div class="detail-card-title">Rendimiento Histórico (Kg/ha)</div>
+        <div class="chart-wrap"><canvas id="detail-chart"></canvas></div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-title">Metadatos</div>
+        <div class="meta-grid">
+          <div class="meta-item"><div class="meta-key">Parcela</div><div class="meta-val">${c.parcela}</div></div>
+          <div class="meta-item"><div class="meta-key">Variedad</div><div class="meta-val"><span class="${varColor(c.variedad)}">${c.variedad}</span></div></div>
+          <div class="meta-item"><div class="meta-key">Año plantación</div><div class="meta-val">${c.anio}</div></div>
+          <div class="meta-item"><div class="meta-key">Clon</div><div class="meta-val">${c.clon}</div></div>
+          <div class="meta-item"><div class="meta-key">Hectáreas</div><div class="meta-val">${c.ha.toFixed(1)} ha</div></div>
+          <div class="meta-item"><div class="meta-key">Riego</div><div class="meta-val">${c.riego}</div></div>
+          <div class="meta-item"><div class="meta-key">Clasificación actual</div><div class="meta-val">${clasifBadge(c.clasif)}</div></div>
+          <div class="meta-item"><div class="meta-key">Recomendación</div><div class="meta-val">${clasifBadge(rec)}</div></div>
+        </div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-title">Notas de Campo</div>
+        <textarea class="notes-area" id="notes-area" placeholder="Ingresa observaciones libres…" oninput="saveNote(${c.num}, this.value)">${state.notes[c.num]||''}</textarea>
+      </div>
+    </div>
+    <div class="detail-right">
+      <div class="detail-card">
+        <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Score Compuesto</span>
+          <span style="font-size:24px;font-weight:700;color:${scoreColor(sc.total)}">${sc.total}</span>
+        </div>
+        <div class="score-bar" style="height:10px;margin-bottom:12px">
+          <div class="score-fill" style="width:${sc.total}%;background:${scoreColor(sc.total)}"></div>
+        </div>
+        <div class="criteria-list">${breakdownHtml}</div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Evaluación Campo ${calTag}</span>
+          <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px" onclick="openCalicataModal(${c.num})">Editar Cal.</button>
+        </div>
+        ${calContent}
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-title">Kg Móvil 2026</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="meta-item"><div class="meta-key">Total</div><div class="meta-val">${fmt(c.movil26)} kg</div></div>
+          <div class="meta-item"><div class="meta-key">Kg/ha</div><div class="meta-val">${fmt(Math.round(c.movil26/c.ha))}</div></div>
+          <div class="meta-item"><div class="meta-key">vs PPTO</div><div class="meta-val" style="color:${c.dif_pct<0?'var(--rojo-light)':'var(--verde-light)'}">${fmtPct(c.dif_pct)}</div></div>
+          <div class="meta-item"><div class="meta-key">CLP/Kg est.</div><div class="meta-val">${c._clpKg?fmt(c._clpKg):'—'}</div></div>
+        </div>
+      </div>
+    </div>`;
+
+  // Draw chart
+  if(detailChart){ detailChart.destroy(); detailChart=null; }
+  const ctx = document.getElementById('detail-chart').getContext('2d');
+  const kgha = [c.kg24/c.ha, c.kg25/c.ha, c.ppto26/c.ha, c.movil26/c.ha].map(x=>Math.round(x));
+  detailChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels:['2024 Real','2025 Real','PPTO 2026','Móvil 2026'],
+      datasets:[{
+        data: kgha,
+        backgroundColor:['rgba(139,64,32,.75)','rgba(200,144,16,.65)','rgba(196,168,128,.6)','rgba(42,110,26,.75)'],
+        borderColor:['#8B4020','#C89010','#BFA882','#2A6E1A'],
+        borderWidth:1,borderRadius:4
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${fmt(ctx.raw)} Kg/ha`}}},
+      scales:{
+        x:{ticks:{color:'#9A8070',font:{family:'Space Mono',size:11}},grid:{color:'#E8DDD0'}},
+        y:{ticks:{color:'#9A8070',font:{family:'Space Mono',size:11},callback:v=>fmt(v)},grid:{color:'#E8DDD0'},beginAtZero:false}
+      }
+    }
+  });
+}
+
+function saveNote(num, val){ state.notes[num]=val; }
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: COSTOS
+// ═══════════════════════════════════════════════════════
+function renderCostos(){
+  const data = state.costos;
+  const totalReal  = data.reduce((s,x)=>s+x.real,0);
+  const totalMov   = data.reduce((s,x)=>s+x.movil,0);
+  const totalPpto  = data.reduce((s,x)=>s+x.ppto,0);
+  const totalDif   = totalMov - totalPpto;
+  const totalPct   = totalDif / totalPpto * 100;
+  const execPct    = totalReal / totalPpto * 100;
+
+  document.getElementById('cost-kpi-cards').innerHTML = `
+    <div class="card"><div class="card-label">Real a la Fecha</div><div class="card-value">$${(totalReal/1000).toFixed(1)}M</div><div class="card-sub">CLP miles</div></div>
+    <div class="card"><div class="card-label">Móvil 2025-26</div><div class="card-value">$${(totalMov/1000).toFixed(1)}M</div><div class="card-sub">CLP miles</div></div>
+    <div class="card"><div class="card-label">PPTO 2025-26</div><div class="card-value">$${(totalPpto/1000).toFixed(1)}M</div><div class="card-sub">CLP miles</div></div>
+    <div class="card"><div class="card-label">Desviación Móvil</div><div class="card-value" style="color:${totalDif>0?'var(--rojo-light)':'var(--verde-light)'}">${fmtPct(totalPct)}</div><div class="card-sub">${totalDif>0?'sobre':'bajo'} presupuesto</div></div>`;
+
+  const totalKgMov = state.cuarteles.reduce((s,c)=>s+c.movil26,0);
+  const clpKgTotal = totalKgMov > 0 ? Math.round((totalMov*1000)/totalKgMov) : 0;
+
+  const rows = data.map(x=>{
+    const dif = x.movil - x.ppto;
+    const pct = x.ppto > 0 ? dif / x.ppto * 100 : 0;
+    const exec = x.ppto > 0 ? x.real / x.ppto * 100 : 0;
+    const progClass = exec > 95 ? 'prog-over' : exec > 80 ? 'prog-warn' : 'prog-ok';
+    return `<tr>
+      <td>${x.cuenta}</td>
+      <td class="num">${fmt(x.real)}</td>
+      <td class="num" style="color:var(--text-muted)">${fmt(x.restante)}</td>
+      <td class="num" style="color:${dif>0?'var(--rojo-light)':'var(--text)'}">${fmt(x.movil)}</td>
+      <td class="num">${fmt(x.ppto)}</td>
+      <td class="num" style="color:${dif>0?'var(--rojo-light)':'var(--verde-light)'}">${dif>0?'+':''}${fmt(dif)}</td>
+      <td class="num" style="color:${pct>5?'var(--rojo-light)':pct>0?'var(--amber)':'var(--verde-light)'}">${fmtPct(pct)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="prog-bar"><div class="prog-fill ${progClass}" style="width:${Math.min(100,exec)}%"></div></div><span style="font-size:11px;color:var(--text-dim);min-width:35px">${exec.toFixed(0)}%</span></div></td>
+    </tr>`;
+  }).join('');
+
+  const totDif = totalMov-totalPpto;
+  document.getElementById('cost-tbody').innerHTML = rows + `
+    <tr style="border-top:2px solid var(--border-bright);font-weight:700">
+      <td>TOTAL</td>
+      <td class="num">${fmt(totalReal)}</td>
+      <td class="num" style="color:var(--text-muted)">${fmt(data.reduce((s,x)=>s+x.restante,0))}</td>
+      <td class="num" style="color:${totDif>0?'var(--rojo-light)':'var(--text)'}">${fmt(totalMov)}</td>
+      <td class="num">${fmt(totalPpto)}</td>
+      <td class="num" style="color:${totDif>0?'var(--rojo-light)':'var(--verde-light)'}">${totDif>0?'+':''}${fmt(totDif)}</td>
+      <td class="num" style="color:${totalPct>5?'var(--rojo-light)':totalPct>0?'var(--amber)':'var(--verde-light)'}">${fmtPct(totalPct)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="prog-bar"><div class="prog-fill prog-ok" style="width:${Math.min(100,execPct)}%"></div></div><span style="font-size:11px;color:var(--verde-light)">${execPct.toFixed(0)}%</span></div></td>
+    </tr>
+    <tr style="border-top:1px solid var(--border)">
+      <td colspan="8" style="color:var(--text-muted);font-size:11px;padding-top:8px">
+        CLP/Kg estimado (total): <strong style="color:var(--text)">${fmt(clpKgTotal)} CLP/Kg</strong> · Kg Móvil total: ${fmt(Math.round(totalKgMov/1000))} t
+      </td>
+    </tr>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER: MAPA
+// ═══════════════════════════════════════════════════════
+let leafletMap = null;
+const PARCELA_CENTERS = {
+  'P-6':     [-33.305, -71.375],
+  '11H':     [-33.312, -71.390],
+  'P-12 B2': [-33.318, -71.402],
+  'P-13 B':  [-33.324, -71.415],
+  'P-3B2':   [-33.298, -71.360],
+};
+const PARCELA_OFFSETS = {
+  'P-6':     [0.002, 0.003],
+  '11H':     [0.002, 0.003],
+  'P-12 B2': [0.002, 0.003],
+  'P-13 B':  [0.002, 0.003],
+  'P-3B2':   [0.002, 0.003],
+};
+
+function makePolygon(center, ha, idx){
+  const side = Math.sqrt(ha * 0.0001) * 0.6;
+  const lat = center[0] + (idx % 4) * side * 1.4;
+  const lng = center[1] + Math.floor(idx / 4) * side * 1.8;
+  return [[lat, lng],[lat+side, lng],[lat+side, lng+side],[lat, lng+side]];
+}
+
+function initMap(){
+  if(leafletMap){ leafletMap.remove(); leafletMap=null; }
+  leafletMap = L.map('map',{zoomControl:true}).setView([-33.315,-71.390],14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'© OpenStreetMap'
+  }).addTo(leafletMap);
+
+  const parcelaIdx = {};
+  state.cuarteles.forEach(c=>{
+    const sc = calcScore(c);
+    const rec = recomClasif(c, sc.total);
+    const center = PARCELA_CENTERS[c.parcela] || [-33.315,-71.390];
+    const idx = parcelaIdx[c.parcela] = (parcelaIdx[c.parcela]||0)+1;
+    const poly = makePolygon(center, c.ha, idx-1);
+    const color = mapColor(c.clasif);
+    const layer = L.polygon(poly, {
+      color: color, fillColor: color, fillOpacity: 0.35, weight: 1.5
+    }).addTo(leafletMap);
+
+    const kghaM = Math.round(c.movil26/c.ha);
+    const alerts = alertCheck(c, sc.total);
+    layer.bindTooltip(`
+      <div style="font-family:'Space Mono',monospace;font-size:11px;line-height:1.5">
+        <strong style="font-size:13px">C#${c.num}</strong><br>
+        ${c.variedad} ${c.anio} · ${c.parcela}<br>
+        Kg/ha Móvil: <strong>${fmt(kghaM)}</strong><br>
+        Score: <strong>${sc.total}</strong> → Recom: <strong>${rec}</strong>
+        ${alerts.length?`<br><span style="color:#E74C3C">⚠ ${alerts[0]}</span>`:''}
+      </div>`, {permanent:false, sticky:true});
+    layer.on('click', ()=>{ openCuartel(c.num); });
+
+    // Label
+    const latC = poly.reduce((s,p)=>s+p[0],0)/4;
+    const lngC = poly.reduce((s,p)=>s+p[1],0)/4;
+    L.marker([latC,lngC],{
+      icon: L.divIcon({className:'',html:`<div style="font-size:9px;font-family:Space Mono,monospace;color:#E8F0E0;text-shadow:0 0 3px #000;white-space:nowrap">C#${c.num}</div>`,iconAnchor:[10,0]})
+    }).addTo(leafletMap);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAB CONTROL
+// ═══════════════════════════════════════════════════════
+function showTab(tab){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+tab).classList.add('active');
+  const tabs = {resumen:0, cuartel:1, costos:2, mapa:3};
+  document.querySelectorAll('.tab')[tabs[tab]].classList.add('active');
+
+  if(tab==='mapa' && !leafletMap) setTimeout(initMap, 50);
+  if(tab==='mapa' && leafletMap) setTimeout(()=>leafletMap.invalidateSize(), 50);
+  if(tab==='resumen'){ renderKPIs(); renderResumen(); }
+  if(tab==='cuartel' && state.selectedNum) renderDetail();
+  if(tab==='costos') renderCostos();
+}
+
+// ═══════════════════════════════════════════════════════
+//  FILTERS
+// ═══════════════════════════════════════════════════════
+function filterTable(v){ state.filterSearch=v; renderResumen(); }
+function filterParcela(v){ state.filterParcela=v; renderResumen(); }
+function filterVariedad(v){ state.filterVariedad=v; renderResumen(); }
+function filterClasif(v){ state.filterClasif=v; renderResumen(); }
+
+// ═══════════════════════════════════════════════════════
+//  CALICATA MODAL
+// ═══════════════════════════════════════════════════════
+function openCalicataModal(num){
+  const c = state.cuarteles.find(x=>x.num===num);
+  const cal = state.calicatas[num] || {};
+  document.getElementById('modal-cal-num').value = num;
+  document.getElementById('modal-cal-title').textContent = `C#${num} · ${c?.variedad} ${c?.anio}`;
+  document.getElementById('cal-vigor').value = cal.vigor || 'Medio';
+  document.getElementById('cal-raices').value = cal.raices || 'Media';
+  document.getElementById('cal-compactacion').value = cal.compactacion || 'Leve';
+  document.getElementById('cal-muertas').value = cal.muertas || 0;
+  document.getElementById('cal-obs').value = cal.obs || '';
+  document.getElementById('modal-calicata').classList.add('open');
+}
+
+function saveCalicata(){
+  const num = parseInt(document.getElementById('modal-cal-num').value);
+  state.calicatas[num] = {
+    vigor: document.getElementById('cal-vigor').value,
+    raices: document.getElementById('cal-raices').value,
+    compactacion: document.getElementById('cal-compactacion').value,
+    muertas: parseInt(document.getElementById('cal-muertas').value)||0,
+    obs: document.getElementById('cal-obs').value,
+    fuente: 'Manual',
+  };
+  closeModal('modal-calicata');
+  renderKPIs(); renderResumen();
+  if(state.selectedNum===num) renderDetail();
+  toast(`Evaluación C#${num} guardada`);
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════
+//  FILE UPLOAD — SheetJS
+// ═══════════════════════════════════════════════════════
+function handleKgUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets['Informe #7'] || wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      // Find header row (look for "Cuartel" in col B area)
+      let hdrRow = -1;
+      for(let i=0;i<raw.length;i++){
+        const r = raw[i];
+        const rowStr = r.join('|').toLowerCase();
+        if(rowStr.includes('cuartel') && rowStr.includes('variedad')){ hdrRow=i; break; }
+      }
+      if(hdrRow<0){ toast('No se encontró hoja "Informe #7" con estructura esperada', true); return; }
+
+      const hdrs = raw[hdrRow];
+      const colIdx = {};
+      hdrs.forEach((h,i)=>{
+        const hs = String(h).toLowerCase();
+        if(hs.includes('cuartel')) colIdx.num = i;
+        if(hs.includes('parcela')) colIdx.parcela = i;
+        if(hs.includes('variedad')) colIdx.variedad = i;
+        if(hs.includes('plantación')||hs.includes('plantacion')) colIdx.anio = i;
+        if(hs.includes('ha') && !hs.includes('kgha')) colIdx.ha = i;
+        if(hs.includes('clasificación')||hs.includes('clasif')) colIdx.clasif = i;
+        if(hs.includes('clon')) colIdx.clon = i;
+        if(hs.includes('riego')||hs.includes('sector')) colIdx.riego = i;
+        if(hs.match(/kg.*real.*2024/)||hs.match(/2024.*real/)) colIdx.kg24 = i;
+        if(hs.match(/kg.*real.*2025/)||hs.match(/2025.*real/)) colIdx.kg25 = i;
+        if(hs.match(/ppto.*2026|2026.*ppto/)) colIdx.ppto26 = i;
+        if(hs.match(/m[oó]vil.*kg|kg.*m[oó]vil/)) colIdx.movil26 = i;
+        if(hs.match(/dif|desv/)) colIdx.dif_pct = i;
+      });
+
+      const newData = [];
+      for(let i=hdrRow+1;i<raw.length;i++){
+        const r = raw[i];
+        const num = parseInt(r[colIdx.num]);
+        if(!num || isNaN(num)) continue;
+        newData.push({
+          num, parcela: r[colIdx.parcela]||'', variedad: r[colIdx.variedad]||'CH',
+          anio: parseInt(r[colIdx.anio])||2000, clon: String(r[colIdx.clon]||''),
+          ha: parseFloat(r[colIdx.ha])||1, riego: r[colIdx.riego]||'Goteo',
+          clasif: r[colIdx.clasif]||'LP',
+          kg24: parseFloat(r[colIdx.kg24])||0, kg25: parseFloat(r[colIdx.kg25])||0,
+          ppto26: parseFloat(r[colIdx.ppto26])||0, movil26: parseFloat(r[colIdx.movil26])||0,
+          dif_pct: parseFloat(r[colIdx.dif_pct])||0,
+        });
+      }
+
+      if(newData.length<5){ toast('Pocos cuarteles detectados. Verifica estructura del Excel.', true); return; }
+      state.cuarteles = newData;
+      document.getElementById('lbl-kg').classList.add('loaded');
+      document.getElementById('lbl-kg').querySelector('span:last-of-type') && (()=>{})();
+      renderKPIs(); renderResumen();
+      toast(`✓ ${newData.length} cuarteles cargados desde ${file.name}`);
+    } catch(err){
+      toast('Error al procesar Excel: '+err.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleCostUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets['1. PPTO Agrícola Casablanca'] || wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      let hdrRow = -1;
+      for(let i=0;i<raw.length;i++){
+        const r = raw[i];
+        const s = r.join('|').toLowerCase();
+        if((s.includes('real')||s.includes('cuenta'))&&s.includes('ppto')){ hdrRow=i; break; }
+      }
+      if(hdrRow<0){ toast('No se encontró estructura de costos esperada', true); return; }
+
+      const hdrs = raw[hdrRow];
+      const ci = {};
+      hdrs.forEach((h,i)=>{
+        const hs = String(h).toLowerCase();
+        if(hs.includes('cuenta')||hs.includes('item')) ci.cuenta=i;
+        if(hs.match(/real.*fecha|a.*la.*fecha/)) ci.real=i;
+        if(hs.includes('restante')) ci.restante=i;
+        if(hs.match(/m[oó]vil/)) ci.movil=i;
+        if(hs.match(/ppto|presupuesto/)) ci.ppto=i;
+      });
+
+      const newCostos = [];
+      for(let i=hdrRow+1;i<raw.length;i++){
+        const r = raw[i];
+        const cuenta = String(r[ci.cuenta]||'').trim();
+        if(!cuenta) continue;
+        const real = parseFloat(r[ci.real])||0;
+        const movil = parseFloat(r[ci.movil])||0;
+        const ppto = parseFloat(r[ci.ppto])||0;
+        if(ppto===0 && movil===0) continue;
+        newCostos.push({cuenta, real, restante: ppto-real, movil, ppto});
+      }
+
+      if(newCostos.length<2){ toast('Pocas cuentas detectadas en archivo de costos', true); return; }
+      state.costos = newCostos;
+      document.getElementById('lbl-cost').classList.add('loaded');
+      renderCostos();
+      toast(`✓ ${newCostos.length} cuentas de costo cargadas desde ${file.name}`);
+    } catch(err){
+      toast('Error al procesar Excel de costos: '+err.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EXPORT XLSX
+// ═══════════════════════════════════════════════════════
+function exportXLSX(){
+  const rows = state.cuarteles.map(c=>{
+    const sc = calcScore(c);
+    const rec = recomClasif(c, sc.total);
+    const alerts = alertCheck(c, sc.total);
+    return {
+      'Cuartel': `C#${c.num}`,
+      'Parcela': c.parcela,
+      'Variedad': c.variedad,
+      'Año Plantación': c.anio,
+      'Ha 2026': c.ha,
+      'Clasif. Actual': String(c.clasif),
+      'Clasif. Recomendada': rec,
+      'Score (0-100)': sc.total,
+      'Kg/ha 2024': Math.round(c.kg24/c.ha),
+      'Kg/ha 2025': Math.round(c.kg25/c.ha),
+      'Kg/ha Móvil 2026': Math.round(c.movil26/c.ha),
+      'Dev. Móvil vs PPTO %': c.dif_pct,
+      'CLP/Kg est.': c._clpKg||'',
+      'Alerta': alerts.join('; '),
+      'Notas': state.notes[c.num]||'',
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:8},{wch:12},{wch:8},{wch:12},{wch:6},{wch:14},{wch:16},{wch:10},{wch:10},{wch:10},{wch:12},{wch:12},{wch:10},{wch:30},{wch:25}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cuarteles Casablanca');
+
+  // Costos sheet
+  const costRows = state.costos.map(x=>({
+    Cuenta: x.cuenta, 'Real a Fecha': x.real, Restante: x.restante,
+    'Móvil 2025-26': x.movil, 'PPTO 2025-26': x.ppto,
+    Diferencia: x.movil-x.ppto, '% Desv.': x.ppto>0?((x.movil-x.ppto)/x.ppto*100).toFixed(1):0
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(costRows), 'Costos Agrícolas');
+
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `${stamp}_Dashboard_IWCC_Casablanca.xlsx`);
+  toast('✓ Excel exportado correctamente');
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Pre-compute _clpKg
+  state.cuarteles.forEach(c=>calcScore(c));
+  renderKPIs();
+  renderResumen();
+});
+</script>
+</body>
+</html>
